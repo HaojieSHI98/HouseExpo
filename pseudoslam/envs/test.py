@@ -21,6 +21,8 @@ class MonitorEnv(gym.Wrapper):
         self._num_returned = 0
         self.param = param
         self.current_obs = None
+        self.obstacle = []
+        self.pose = None
 
     def reset(self, **kwargs):
         obs = self.env.reset(**kwargs).squeeze()
@@ -41,6 +43,7 @@ class MonitorEnv(gym.Wrapper):
 
     def step(self, action):
         obs, rew, done, info = self.env.step(action)
+        self.update()
         obs = np.squeeze(obs)
         self.current_obs = obs.copy()
         self._current_reward += rew
@@ -64,29 +67,54 @@ class MonitorEnv(gym.Wrapper):
             yield (self._episode_rewards[i], self._episode_lengths[i])
         self._num_returned = len(self._episode_rewards)
 
+    def calc_energy(self,pose,contour):
+        (pose_y, pose_x) = (int(pose[0]), int(pose[1]))
+        obs_energy = 0
+
+        print(self.obstacle)
+
+
+    def update(self):
+        # 0-y 1-x
+        img = self.env.sim.get_state().copy()
+        self.obstacle = np.where(img>=90) 
+        self.pose = self.env.sim.get_pose()
+        # for i in range(len(obstacle[0])):
+        #     print('obs:',img[obstacle[0][i],obstacle[1][i]],'xy:',obstacle[0][i],obstacle[1][i])
+        # print('obs:',self.obstacle)
+        # return obstacle
+
+    def cal_frontier_reward(self,contour,)
+
     def find_contour(self):
         img = self.env.sim.get_state().copy()
-        ret,binary = cv2.threshold(img,-1,1,cv2.THRESH_BINARY)
+        # print('shape',img.shape)
+        h,w = img.shape
+        _,binary = cv2.threshold(img,-1,1,cv2.THRESH_BINARY)
         binary_=binary.astype(np.uint8)
         # binary = np.dtype(binary,np.uint8)
         # print('max:',np.max(binary),'min:',np.min(binary),binary_.dtype)
         # raise NotImplementedError
         #  gray = cv2.cvtColor(thresh, cv2.COLOR_BGR2GRAY)
-        contours,hierarchy = cv2.findContours(binary_,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
+        contours,hierarchy = cv2.findContours(binary_,cv2.RETR_TREE,cv2.CHAIN_APPROX_NONE)
         new_contour = []
         nc = []
+        img_ref = img.copy()
         for point in contours[0]:
-            # print(point[0],img[point[0][1],point[0][0]])
-            # if img[point[0][1],point[0][0]]!=0:
-            #     # nc.append(point)
-            #     img[point[0][1],point[0][0]]=0
-            img[point[0][1],point[0][0]]=50
-        # new_contour.append(nc)
-        # imag = cv2.drawContours(img,new_contour,-1,100,1)
-        # img_ = imag-img
-        # print(np.max(img_),np.min(img_))
-        # raise NotImplementedError
-        return img
+            img[point[0][1],point[0][0]]=100
+        img_diff = img-img_ref
+        _,binary = cv2.threshold(img_diff,90,100,cv2.THRESH_BINARY)
+        binary_c = binary.astype(np.uint8)
+        contours_,hierarchy = cv2.findContours(binary_c,cv2.RETR_TREE,cv2.CHAIN_APPROX_NONE)
+        contour_img = np.zeros((h,w),dtype=np.uint8)
+        cons = []
+        for con in contours_:
+            if len(con)>5:
+                cons.append(con)
+        # print(len(cons))
+        # cv2.drawContours(contour_img,[contours_[1]],-1,255,1)
+        cv2.drawContours(contour_img,cons,-1,255,1)
+        return contour_img
 
 
 if __name__ == '__main__':
