@@ -9,7 +9,7 @@ from gym.utils import seeding
 # from pseudoslam.envs.simulator.pseudoSlam import pseudoSlam
 
 class MonitorEnv(gym.Wrapper):
-    def __init__(self, env=None,param={'vel':1,'foot':0,'tau':0}):
+    def __init__(self, env=None,param={'goal':1}):
         """Record episodes stats prior to EpisodicLifeEnv, etc."""
         gym.Wrapper.__init__(self, env)
         self._current_reward = None
@@ -23,6 +23,10 @@ class MonitorEnv(gym.Wrapper):
         self.current_obs = None
         self.obstacle = []
         self.pose = None
+        self.future_pose = {}
+        self.action2command = {0:'forward',1:'left',2:'right'}
+        self.calc_step_length = 0.1
+        self.contour = None
 
     def reset(self, **kwargs):
         obs = self.env.reset(**kwargs).squeeze()
@@ -43,7 +47,14 @@ class MonitorEnv(gym.Wrapper):
 
     def step(self, action):
         obs, rew, done, info = self.env.step(action)
-        self.update()
+        self.update(action)
+        info = {}
+        info['goal'] = self.param['goal']*self.calc_simple_rewards(action)
+        # print(info)
+        # print('rew',rew)
+        # self.calc_simple_reward(0)
+        # self.calc_simple_reward(1)
+        # self.calc_simple_reward(2)
         obs = np.squeeze(obs)
         self.current_obs = obs.copy()
         self._current_reward += rew
@@ -67,24 +78,102 @@ class MonitorEnv(gym.Wrapper):
             yield (self._episode_rewards[i], self._episode_lengths[i])
         self._num_returned = len(self._episode_rewards)
 
+    # def calc_dist(a,b):
+    #     return (a[0]-b[0])*(a[0]-b[0])+(a[0]-b[0])*(a[0]-b[0])
     def calc_energy(self,pose,contour):
         (pose_y, pose_x) = (int(pose[0]), int(pose[1]))
-        obs_energy = 0
+        obs_energy = self.calc_obs_energy(pose)
 
         print(self.obstacle)
 
 
-    def update(self):
+    def next_pose(self,pose,action):
+        motion = self.env.sim.motionChoice[action]
+        dv= motion[0]*self.calc_step_length # forward motion
+        dtheta= motion[1]*self.calc_step_length
+        theta= pose[2] + dtheta
+        theta= np.arctan2(np.sin(theta),np.cos(theta))
+        y= pose[0] - np.sin(theta)*dv
+        x= pose[1] + np.cos(theta)*dv
+        target_pose = np.array([y,x,theta])
+        return target_pose
+
+    def calc_simple_dist(self,pose):
+        theta = pose[2]
+        angle_vec = (np.cos(theta),-np.sin(theta))
+        i = 0
+        dist_min = 1e6
+        for con in self.contour:
+            contour = np.asarray(con).reshape(-1,2)
+            a = contour[:,0]-pose[1]
+            b = contour[:,1]-pose[0]
+            c =np.mean(np.power(a,2)+np.power(b,2))
+            if dist_min>c or i==0:
+                dist_min = c
+        return dist_min
+    def calc_simple_rewards(self,action):
+        rewards = np.zeros(3)
+        for i in range(3):
+            rewards[i] = np.exp(self.calc_simple_reward(i))
+        reward = rewards[action]/np.sum(rewards)
+        return reward
+
+        
+    def calc_simple_reward(self,action):
+        command = self.action2command[action]
+        future_pose = self.next_pose(self.pose,command)
+        if action !=0:
+            future_pose = self.next_pose(future_pose,'forward')
+            pose2 = self.next_pose(self.pose,'forward')
+        else:
+            pose2  = self.pose
+        dist1 = self.calc_simple_dist(future_pose)
+        dist2 = self.calc_simple_dist(pose2)
+        reward = dist2-dist1
+        return reward
+        # print('action:{} reward:{}'.format(action,reward))
+            # dists.append(dists)
+
+        # print(np.min(dists))
+        # raise NotImplemented
+        
+            # print(c)
+            # raise NotImplemented
+            # print(contour)
+            # for point in con:
+            #     p = point[0]
+            #     print(p)
+            # raise NotImplemented
+        #         dist = 
+                # print(point[0][0])
+            # print('endd')
+            # conx = con[0][0]
+            # print(con[1])
+        # print('end')
+
+    def update(self,action):
         # 0-y 1-x
         img = self.env.sim.get_state().copy()
         self.obstacle = np.where(img>=90) 
         self.pose = self.env.sim.get_pose()
-        # for i in range(len(obstacle[0])):
-        #     print('obs:',img[obstacle[0][i],obstacle[1][i]],'xy:',obstacle[0][i],obstacle[1][i])
+        # command = self.action2command[action]
+        # self.future_pose[command] = self.next_pose(self.pose,command)
+        # if action != 0:
+        #     self.future_pose['forward'] = self.next_pose(self.pose,'forward')
+        # else:
+        #     self.future_pose[command] = self.next_pose(self.future_pose[command],'forward')
+        self.find_contour()
+        # a = self.obstacle[0]-self.pose[0]
+        # b = self.obstacle[1]-self.pose[1]
+        # c = np.power(a,2)+np.power(b,2)
+        # c[np.where(c>)
+        # print(c)
+        # print(np.power(a,2)+np.pow(b,2))
+            # print('obs:',img[obstacle[0][i],obstacle[1][i]],'xy:',obstacle[0][i],obstacle[1][i])
         # print('obs:',self.obstacle)
         # return obstacle
 
-    def cal_frontier_reward(self,contour,)
+    # def cal_frontier_reward(self,contour,)
 
     def find_contour(self):
         img = self.env.sim.get_state().copy()
@@ -111,10 +200,17 @@ class MonitorEnv(gym.Wrapper):
         for con in contours_:
             if len(con)>5:
                 cons.append(con)
+        pose =  self.env.sim.get_pose()
+        self.contour = cons
+        # print(pose*180/3.14)
         # print(len(cons))
         # cv2.drawContours(contour_img,[contours_[1]],-1,255,1)
-        cv2.drawContours(contour_img,cons,-1,255,1)
-        return contour_img
+        # for con in cons:
+        #     for p in con:
+        #         contour_img[p[0][1],p[0][0]]=255
+        # cv2.drawContours(contour_img,cons,-1,255,1)
+        # return contour_img
+        # return contour
 
 
 if __name__ == '__main__':
