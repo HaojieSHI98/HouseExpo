@@ -231,8 +231,8 @@ class MonitorEnv(gym.Wrapper):
         
         contour_img[np.where(img>=90)]=-1
         pose = self.env.sim.get_pose()
-        y= round(pose[0])
-        x= round(pose[1])
+        y= int(round(pose[0]))
+        x= int(round(pose[1]))
         contour_img[y-2:y+2,x-2:x+2]=-101
         cv2.drawContours(contour_img,cons,-1,100,1)
         a,b = np.where(contour_img!=0)
