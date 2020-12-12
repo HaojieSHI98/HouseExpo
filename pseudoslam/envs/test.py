@@ -36,8 +36,8 @@ class MonitorEnv(gym.Wrapper):
         self.obs = self.find_contour()
         # self.update(action)
         obs = np.squeeze(obs)
-        if self.param['obs']:
-            obs = np.concatenate((obs,self.obs))
+        # if self.param['obs']:
+        #     obs = np.concatenate((obs,self.obs))
         # obs = obs.reshape(64,64)
         self.current_obs = obs.copy()
         if self._total_steps is None:
@@ -51,7 +51,7 @@ class MonitorEnv(gym.Wrapper):
         self._current_reward = 0
         self._num_steps = 0
 
-        return obs
+        return (obs,self.obs)
 
     def step(self, action):
         obs, rew, done, info = self.env.step(action)
@@ -62,15 +62,15 @@ class MonitorEnv(gym.Wrapper):
 
         # print('obs:',obs.shape)
         obs = np.squeeze(obs)
-        if self.param['obs']:
-            obs = np.concatenate((obs,self.obs))
+        # if self.param['obs']:
+        #     obs = np.concatenate((obs,self.obs))
         # print(obs.shape)
         self.current_obs = obs.copy()
         self._current_reward += rew
         self._num_steps += 1
         self._total_steps += 1
         # raise NotImplemented
-        return (obs, rew, done, info)
+        return (obs, rew, done, info,self.obs)
 
     def get_episode_rewards(self):
         return self._episode_rewards
