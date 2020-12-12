@@ -53,13 +53,7 @@ class MonitorEnv(gym.Wrapper):
         info = {}
 
         info['goal'] = self.param['goal']*self.calc_simple_rewards(action)
-        # print(self.param['goal'])
-        # info['goalxy'] = self.goalxy
-        # print(info)
-        # print('rew',rew)
-        # self.calc_simple_reward(0)
-        # self.calc_simple_reward(1)
-        # self.calc_simple_reward(2)
+        # print('obs:',obs.shape)
         obs = np.squeeze(obs)
         self.current_obs = obs.copy()
         self._current_reward += rew
@@ -167,7 +161,7 @@ class MonitorEnv(gym.Wrapper):
             # return self.dists['forward']-self.dists['now']
         else:
             reward = self.dists[command]-self.dists['forward']
-        reward = max(reward,-100)
+        # reward = max(reward,-100)
         return reward
             # return self.dists[command]-self.dists['forward']
         # return reward
@@ -175,8 +169,9 @@ class MonitorEnv(gym.Wrapper):
 
     def update(self,action):
         # 0-y 1-x
-        img = self.env.sim.get_state().copy()
-        self.obstacle = np.where(img>=90) 
+        # img = self.env.sim.get_state().copy()
+        # self.obstacle = np.where(img>=90) 
+        self.find_contour()
         self.pose = self.env.sim.get_pose()
         self.future_pose['forward'] = self.next_pose(self.pose,'forward')
         left = self.next_pose(self.pose,'left')
@@ -195,7 +190,7 @@ class MonitorEnv(gym.Wrapper):
         #     self.future_pose['forward'] = self.next_pose(self.pose,'forward')
         # else:
         #     self.future_pose[command] = self.next_pose(self.future_pose[command],'forward')
-        self.find_contour()
+        
         # a = self.obstacle[0]-self.pose[0]
         # b = self.obstacle[1]-self.pose[1]
         # c = np.power(a,2)+np.power(b,2)
@@ -275,7 +270,7 @@ if __name__ == '__main__':
         # print(env.find_contour())
         # epi_cnt += 1
         # act = np.random.randint(3)
-        act = 1
+        act = 0
         obs, reward, done, info = env.step(act)
         cmd = ['forward', 'left', 'right']
        
