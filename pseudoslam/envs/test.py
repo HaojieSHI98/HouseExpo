@@ -153,7 +153,7 @@ class MonitorEnv(gym.Wrapper):
         rewards = np.zeros(3)
         for i in range(3):
             rewards[i] = np.exp(self.calc_simple_reward(i))
-        print('rewards',rewards)
+        # print('rewards',rewards)
         reward = rewards[action]/(np.sum(rewards)+1e-5)
 
         return reward
