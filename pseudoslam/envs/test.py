@@ -27,6 +27,8 @@ class MonitorEnv(gym.Wrapper):
         self.action2command = {0:'forward',1:'left',2:'right'}
         self.calc_step_length = 0.1
         self.contour = None
+        self.dists = {}
+        self.goalxy = np.zeros(6)
 
     def reset(self, **kwargs):
         obs = self.env.reset(**kwargs).squeeze()
@@ -49,7 +51,10 @@ class MonitorEnv(gym.Wrapper):
         obs, rew, done, info = self.env.step(action)
         self.update(action)
         info = {}
+
         info['goal'] = self.param['goal']*self.calc_simple_rewards(action)
+        # print(self.param['goal'])
+        # info['goalxy'] = self.goalxy
         # print(info)
         # print('rew',rew)
         # self.calc_simple_reward(0)
@@ -60,6 +65,7 @@ class MonitorEnv(gym.Wrapper):
         self._current_reward += rew
         self._num_steps += 1
         self._total_steps += 1
+        # raise NotImplemented
         return (obs, rew, done, info)
 
     def get_episode_rewards(self):
@@ -99,63 +105,90 @@ class MonitorEnv(gym.Wrapper):
         return target_pose
 
     def calc_simple_dist(self,pose):
-        theta = pose[2]
-        angle_vec = (np.cos(theta),-np.sin(theta))
-        i = 0
-        dist_min = 1e6
-        for con in self.contour:
-            contour = np.asarray(con).reshape(-1,2)
-            a = contour[:,0]-pose[1]
-            b = contour[:,1]-pose[0]
-            c =np.mean(np.power(a,2)+np.power(b,2))
-            if dist_min>c or i==0:
-                dist_min = c
-        return dist_min
+        if pose[0]==self.pose[0] and pose[1]==self.pose[1] and pose[2]==self.pose[2]:
+            self.goalxy = np.zeros(6)
+            dist = []
+            xy_list = []
+            # i = 0
+            dist_min = 1e6
+            for con in self.contour:
+                contour = np.asarray(con).reshape(-1,2)
+                a = contour[:,0]-pose[1]
+                b = contour[:,1]-pose[0]
+                c =np.mean(np.power(a,2)+np.power(b,2))
+                # print(c )
+                dist.append(c)
+                xy_list.append((np.mean(a),np.mean(b)))
+                # if dist_min>c or i==0:
+                #     dist_min = c
+            while(len(dist)<3):
+                dist.append(1e6)
+                xy_list.append((0,0))
+            dist_arr = np.asarray(dist)
+            sort_arg = np.argsort(dist_arr)
+            for i in range(3):
+                index = sort_arg[i]
+                # print(xy_list[index])
+                self.goalxy[2*i] = xy_list[index][0]/100
+                self.goalxy[2*i+1] = xy_list[index][1]/100
+            dist_min = np.min(dist_arr)
+            return dist_min
+        else:
+            # print('pose',pose)
+            i = 0
+            dist_min = 1e6
+            for con in self.contour:
+                contour = np.asarray(con).reshape(-1,2)
+                a = contour[:,0]-pose[1]
+                b = contour[:,1]-pose[0]
+                c =np.mean(np.power(a,2)+np.power(b,2))
+                # print(c)
+                if dist_min>c or i==0:
+                    dist_min = c
+                i += 1
+            # print(dist_min)
+            return dist_min
+
     def calc_simple_rewards(self,action):
         rewards = np.zeros(3)
         for i in range(3):
             rewards[i] = np.exp(self.calc_simple_reward(i))
-        reward = rewards[action]/np.sum(rewards)
+        print('rewards',rewards)
+        reward = rewards[action]/(np.sum(rewards)+1e-5)
+
         return reward
 
         
     def calc_simple_reward(self,action):
         command = self.action2command[action]
-        future_pose = self.next_pose(self.pose,command)
-        if action !=0:
-            future_pose = self.next_pose(future_pose,'forward')
-            pose2 = self.next_pose(self.pose,'forward')
+        # print(self.dists['now'] ,self.dists['forward'] )
+        if action == 0:
+            reward = self.dists['forward']-self.dists['now']
+            # return self.dists['forward']-self.dists['now']
         else:
-            pose2  = self.pose
-        dist1 = self.calc_simple_dist(future_pose)
-        dist2 = self.calc_simple_dist(pose2)
-        reward = dist2-dist1
+            reward = self.dists[command]-self.dists['forward']
+        reward = max(reward,-100)
         return reward
-        # print('action:{} reward:{}'.format(action,reward))
-            # dists.append(dists)
+            # return self.dists[command]-self.dists['forward']
+        # return reward
 
-        # print(np.min(dists))
-        # raise NotImplemented
-        
-            # print(c)
-            # raise NotImplemented
-            # print(contour)
-            # for point in con:
-            #     p = point[0]
-            #     print(p)
-            # raise NotImplemented
-        #         dist = 
-                # print(point[0][0])
-            # print('endd')
-            # conx = con[0][0]
-            # print(con[1])
-        # print('end')
 
     def update(self,action):
         # 0-y 1-x
         img = self.env.sim.get_state().copy()
         self.obstacle = np.where(img>=90) 
         self.pose = self.env.sim.get_pose()
+        self.future_pose['forward'] = self.next_pose(self.pose,'forward')
+        left = self.next_pose(self.pose,'left')
+        self.future_pose['left'] = self.next_pose(left,'forward')
+        right = self.next_pose(self.pose,'right')
+        self.future_pose['right'] = self.next_pose(right,'right')
+        self.dists['now'] = self.calc_simple_dist(self.pose)
+        self.dists['forward'] = self.calc_simple_dist(self.future_pose['forward'])
+        self.dists['left'] = self.calc_simple_dist(self.future_pose['left'])
+        self.dists['right'] = self.calc_simple_dist(self.future_pose['right'])
+        # print(self.pose,self.future_pose)
+        # print(self.dists['now'] ,self.dists['forward'] )
         # command = self.action2command[action]
         # self.future_pose[command] = self.next_pose(self.pose,command)
         # if action != 0:
@@ -208,8 +241,8 @@ class MonitorEnv(gym.Wrapper):
         # for con in cons:
         #     for p in con:
         #         contour_img[p[0][1],p[0][0]]=255
-        # cv2.drawContours(contour_img,cons,-1,255,1)
-        # return contour_img
+        cv2.drawContours(contour_img,cons,-1,255,1)
+        return contour_img
         # return contour
 
 
@@ -242,7 +275,7 @@ if __name__ == '__main__':
         # print(env.find_contour())
         # epi_cnt += 1
         # act = np.random.randint(3)
-        act = 0
+        act = 1
         obs, reward, done, info = env.step(act)
         cmd = ['forward', 'left', 'right']
        
