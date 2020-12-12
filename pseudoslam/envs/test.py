@@ -9,7 +9,7 @@ from gym.utils import seeding
 # from pseudoslam.envs.simulator.pseudoSlam import pseudoSlam
 
 class MonitorEnv(gym.Wrapper):
-    def __init__(self, env=None,param={'goal':1}):
+    def __init__(self, env=None,param={'goal':1,'obs':1}):
         """Record episodes stats prior to EpisodicLifeEnv, etc."""
         gym.Wrapper.__init__(self, env)
         self._current_reward = None
@@ -29,9 +29,15 @@ class MonitorEnv(gym.Wrapper):
         self.contour = []
         self.dists = {}
         self.goalxy = np.zeros(6)
+        self.obs = None
 
     def reset(self, **kwargs):
         obs = self.env.reset(**kwargs).squeeze()
+        self.obs = self.find_contour()
+        # self.update(action)
+        obs = np.squeeze(obs)
+        if self.param['obs']:
+            obs = np.concatenate((obs,self.obs))
         # obs = obs.reshape(64,64)
         self.current_obs = obs.copy()
         if self._total_steps is None:
@@ -53,8 +59,12 @@ class MonitorEnv(gym.Wrapper):
         info = {}
 
         info['goal'] = self.param['goal']*self.calc_simple_rewards(action)
+
         # print('obs:',obs.shape)
         obs = np.squeeze(obs)
+        if self.param['obs']:
+            obs = np.concatenate((obs,self.obs))
+        # print(obs.shape)
         self.current_obs = obs.copy()
         self._current_reward += rew
         self._num_steps += 1
@@ -171,8 +181,9 @@ class MonitorEnv(gym.Wrapper):
         # 0-y 1-x
         # img = self.env.sim.get_state().copy()
         # self.obstacle = np.where(img>=90) 
-        self.find_contour()
         self.pose = self.env.sim.get_pose()
+        # print(self.pose)
+        self.obs = self.find_contour()
         self.future_pose['forward'] = self.next_pose(self.pose,'forward')
         left = self.next_pose(self.pose,'left')
         self.future_pose['left'] = self.next_pose(left,'forward')
@@ -182,26 +193,7 @@ class MonitorEnv(gym.Wrapper):
         self.dists['forward'] = self.calc_simple_dist(self.future_pose['forward'])
         self.dists['left'] = self.calc_simple_dist(self.future_pose['left'])
         self.dists['right'] = self.calc_simple_dist(self.future_pose['right'])
-        # print(self.pose,self.future_pose)
-        # print(self.dists['now'] ,self.dists['forward'] )
-        # command = self.action2command[action]
-        # self.future_pose[command] = self.next_pose(self.pose,command)
-        # if action != 0:
-        #     self.future_pose['forward'] = self.next_pose(self.pose,'forward')
-        # else:
-        #     self.future_pose[command] = self.next_pose(self.future_pose[command],'forward')
-        
-        # a = self.obstacle[0]-self.pose[0]
-        # b = self.obstacle[1]-self.pose[1]
-        # c = np.power(a,2)+np.power(b,2)
-        # c[np.where(c>)
-        # print(c)
-        # print(np.power(a,2)+np.pow(b,2))
-            # print('obs:',img[obstacle[0][i],obstacle[1][i]],'xy:',obstacle[0][i],obstacle[1][i])
-        # print('obs:',self.obstacle)
-        # return obstacle
 
-    # def cal_frontier_reward(self,contour,)
 
     def find_contour(self):
         img = self.env.sim.get_state().copy()
@@ -236,8 +228,22 @@ class MonitorEnv(gym.Wrapper):
         # for con in cons:
         #     for p in con:
         #         contour_img[p[0][1],p[0][0]]=255
-        cv2.drawContours(contour_img,cons,-1,255,1)
-        return contour_img
+        
+        contour_img[np.where(img>=90)]=-1
+        pose = self.env.sim.get_pose()
+        y= round(pose[0])
+        x= round(pose[1])
+        contour_img[y-2:y+2,x-2:x+2]=-101
+        cv2.drawContours(contour_img,cons,-1,100,1)
+        a,b = np.where(contour_img!=0)
+        a_min = np.min(a)
+        a_max = np.max(a)
+        b_min = np.min(b)
+        b_max = np.max(b)
+        img = contour_img[a_min:a_max,b_min:b_max]
+        img_resize = cv2.resize(img, (64, 64), interpolation=cv2.INTER_NEAREST)
+        # print(np.where(contour_img!=0))
+        return img_resize
         # return contour
 
 
