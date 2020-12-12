@@ -26,7 +26,7 @@ class MonitorEnv(gym.Wrapper):
         self.future_pose = {}
         self.action2command = {0:'forward',1:'left',2:'right'}
         self.calc_step_length = 0.1
-        self.contour = None
+        self.contour = []
         self.dists = {}
         self.goalxy = np.zeros(6)
 
